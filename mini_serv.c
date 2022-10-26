@@ -42,7 +42,7 @@ void send_all(char* str, int len, int skip_fd) {
 }
 
 
-void new_cl(int fd) {
+int new_cl(int fd) {
 	t_cl* nc = calloc(sizeof(t_cl), 1);
 	t_cl* tmp = cls;
 
@@ -86,3 +86,68 @@ void close_client(int fd) {
 		break;
 	}
 }
+
+int main(int argc, char** argv) {
+	int res;
+	struct sockaddr_in servaddr;
+	char c;
+
+	if (argc != 2) {
+		write(2, "Wrong number of arguments\n", 26);
+		exit(1);
+	}
+
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd < 0) fatal();
+	bzero(&servaddr, sizeof(servaddr));
+
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr = htonl(2130706433);
+	servaddr.sin_port = htons(atoi(argv[1]));
+
+	if (bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
+		fatal();
+	}
+	if (listen(sockfd, 0) < 0) {
+		fatal();
+	}
+	FD_ZERO(&cur);
+	FD_SET(sockfd, &cur);
+	while (1) {
+		wr = rd = cur;
+		if (select(max_fd() + 1, &rd, &wr, 0, 0) < 0) fatal();
+		if (FD_ISSET(sockfd, &rd)) {
+			accept_client();
+			continue;
+		}
+		for (t_cl* x = cls; x; x = x->next) {
+			if (!(FD_ISSET(x->fd, &rd))) continue;
+			res = recv(x->fd, &c, 1, 0);
+			if (res < 0) fatal();
+			if (!res) {
+				close_client(x->fd);
+				break;
+			}
+			if (x->newmess) {
+				x->newmess = 0;
+				sprintf(buff, "client %d: ", x->id);
+				send_all(buff, strlen(buff), x->fd);
+			}
+			if (c == '\n') x->newmess = 1;
+			send_all(&c, 1, x->fd);
+			break;
+		}
+	}
+	return (0);
+}
+
+
+
+
+
+
+
+
+
+
+
